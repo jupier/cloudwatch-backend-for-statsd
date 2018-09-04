@@ -1,0 +1,28 @@
+{
+  "name": "cloudwatch-backend-for-statsd",
+  "version": "0.0.1",
+  "description": "simple cloudwatch backend for statsd",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ridrum/cloudwatch-backend-for-statsd.git"
+  },
+  "keywords": [
+    "cloudwatch",
+    "statsd",
+    "aws",
+    "backend"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ridrum/cloudwatch-backend-for-statsd/issues"
+  },
+  "homepage": "https://github.com/ridrum/cloudwatch-backend-for-statsd#readme",
+  "dependencies": {
+    "aws-sdk": "2.307.0"
+  }
+}
