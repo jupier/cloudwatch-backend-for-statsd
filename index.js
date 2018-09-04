@@ -14,13 +14,17 @@ function CloudwatchBackend(startupTime, config, emitter) {
 
     // if iamRole is set attempt to fetch credentials from the Metadata Service
     if (this.config.iamRole) {
+        console.log('Fetching IAM role credentials for ' + this.config.iamRole);
         ms = new AWS.MetadataService();
         ms.request('/latest/meta-data/iam/security-credentials/' + this.config.iamRole, function(err, rdata) {
-            var data = JSON.parse(rdata);
-
-            if (err) { console.log('Failed to fetch IAM role credentials: ' + err); }
-            self.config.credentials = new AWS.Credentials(data.AccessKeyId, data.SecretAccessKey, data.Token);
-            setEmitter();
+            if (err) {
+                console.log('Failed to fetch IAM role credentials: ' + err);
+            } else {
+                console.log('IAM role credentials fetched');
+                var data = JSON.parse(rdata);
+                self.config.credentials = new AWS.Credentials(data.AccessKeyId, data.SecretAccessKey, data.Token);
+                setEmitter();
+            }
         });
     } else {
         setEmitter();
