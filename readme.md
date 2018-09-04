@@ -1,6 +1,6 @@
 **This repository is a clone of https://github.com/camitz/aws-cloudwatch-statsd-backend**
 
-**For maintainability purpose I decided to clone this repository.**
+**For maintainability purpose I decided to clone the repository.**
 
 # StatsD backend for AWS CloudWatch
 
