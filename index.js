@@ -40,25 +40,11 @@ CloudwatchBackend.prototype.processKey = function(key) {
     };
 };
 
-CloudwatchBackend.prototype.isBlacklisted = function(key) {
-
-    var blacklisted = false;
-
-    // First check if key is whitelisted
+CloudwatchBackend.prototype.isWhitelisted = function(key) {
     if (this.config.whitelist && this.config.whitelist.length > 0 && this.config.whitelist.indexOf(key) >= 0) {
-        // console.log("Key (counter) " + key + " is whitelisted");
-        return false;
+        return true;
     }
-
-    if (this.config.blacklist && this.config.blacklist.length > 0) {
-        for (var i = 0; i < this.config.blacklist.length; i++) {
-            if (key.indexOf(this.config.blacklist[i]) >= 0) {
-                blacklisted = true;
-                break;
-            }
-        }
-    }
-    return blacklisted;
+    return false;
 };
 
 CloudwatchBackend.prototype.chunk = function(arr, chunkSize) {
@@ -112,7 +98,7 @@ CloudwatchBackend.prototype.flush = function(timestamp, metrics) {
         if (key.indexOf('statsd.') == 0)
             continue;
 
-        if (this.isBlacklisted(key)) {
+        if (!this.isWhitelisted(key)) {
             continue;
         }
 
@@ -135,7 +121,7 @@ CloudwatchBackend.prototype.flush = function(timestamp, metrics) {
     for (key in timers) {
         if (timers[key].length > 0) {
 
-            if (this.isBlacklisted(key)) {
+            if (!this.isWhitelisted(key)) {
                 continue;
             }
 
@@ -186,7 +172,7 @@ CloudwatchBackend.prototype.flush = function(timestamp, metrics) {
     var currentGaugeMetrics = [];
     for (key in gauges) {
 
-        if (this.isBlacklisted(key)) {
+        if (!this.isWhitelisted(key)) {
             continue;
         }
 
@@ -208,7 +194,7 @@ CloudwatchBackend.prototype.flush = function(timestamp, metrics) {
     var currentSetMetrics = [];
     for (key in sets) {
 
-        if (this.isBlacklisted(key)) {
+        if (!this.isWhitelisted(key)) {
             continue;
         }
 

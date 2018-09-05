@@ -8,7 +8,7 @@
 
 [StatsD](https://github.com/etsy/statsd) is a smart Node.js package that collects and aggregates statistics from differents apps sent over the UDP protocol. At a set time interval it forwards the aggregated data to a configured backend. It is pluggable with several backends available, the most popular being [Graphite](https://github.com/graphite-project/graphite-web), a python/django monitoring tool.
 
-With **aws-cloudwatch-statsd-backend** you can replace Graphite in favour of [AWS Cloudwatch](http://aws.amazon.com/cloudwatch/) for your monitoring purposes, appropriate for sites on the Amazon EC2 cloud.
+With **cloudwatch-backend-for-statsd** you can replace Graphite in favour of [AWS Cloudwatch](http://aws.amazon.com/cloudwatch/) for your monitoring purposes, appropriate for sites on the Amazon EC2 cloud.
 
 Counters, timers, gauges and sets are all supported.
 
@@ -18,7 +18,7 @@ You need node.js installed on your system aswell as StatsD. Follow the instructi
 
 The CloudWatch backend is an npm package that can be installed with the npm command which comes with your installation of node.js. Go to the [npm site](https://npmjs.org/) for more information.
 
-    npm install aws-cloudwatch-statsd-backend
+    npm install cloudwatch-backend-for-statsd
 
 The package has two depdencies that should be installed automatically, [awssum](https://npmjs.org/package/awssum) and [fmt](https://npmjs.org/package/fmt). Awssum is a node.js package encapsulating the AWS API.
 
@@ -31,7 +31,7 @@ The StatsD and its backends are configured in a json object placed in a file sup
 The following demonstrates the minimum config for the CloudWatch backend.
 
     {
-        backends: [ "aws-cloudwatch-statsd-backend" ],
+        backends: [ "cloudwatch-backend-for-statsd" ],
         cloudwatch: 
         {
             accessKeyId: 'YOUR_ACCESS_KEY_ID', 
@@ -65,7 +65,7 @@ The cloudwatch backend provides ways to override the name and namespace by cofig
 The following overrides the default and any provided namespace or metric name with the specified.
 
     {
-        backends: [ "aws-cloudwatch-statsd-backend" ],
+        backends: [ "cloudwatch-backend-for-statsd" ],
         cloudwatch: 
         {
             accessKeyId: 'YOUR_ACCESS_KEY_ID', 
@@ -79,7 +79,7 @@ The following overrides the default and any provided namespace or metric name wi
 Using the option *processKeyForNamespace* (default is false) you can parse the bucket name for namespace in addition to metric name. The backend will use the last component of a bucket name comprised of slash (/), dot (.) or dash (-) separated parts as the metric name. The remaining leading parts will be used as namespace. Separators will be replaced with slashes (/).
 
     {
-        backends: [ "aws-cloudwatch-statsd-backend" ],
+        backends: [ "cloudwatch-backend-for-statsd" ],
         cloudwatch: 
         {
             accessKeyId: 'YOUR_ACCESS_KEY_ID', 
@@ -100,7 +100,7 @@ is will produce the equivalent to the former configuration example. Note that bo
 Using cloudwatch will incur a cost for each metric sent. In order to control your costs, you can optionally whitelist (by full metric name) those metrics sent to cloudwatch. For example:
 
     {
-        backends: [ "aws-cloudwatch-statsd-backend" ],
+        backends: [ "cloudwatch-backend-for-statsd" ],
         cloudwatch: 
         {
             accessKeyId: 'YOUR_ACCESS_KEY_ID', 
@@ -117,7 +117,7 @@ The above configuration would only sent the metric named 'YOUR_FULL_METRIC_NAME'
 A preferable approach to obtaining account credentials is instead to query the Metadata Service to obtain IAM security credentials for a given role. For example:
 
     {
-        backends: [ "aws-cloudwatch-statsd-backend" ],
+        backends: [ "cloudwatch-backend-for-statsd" ],
         cloudwatch:
         {
             iamRole: 'YOUR_ROLE_NAME',
@@ -131,7 +131,7 @@ A preferable approach to obtaining account credentials is instead to query the M
 If you wish to send cloudwatch metrics to multiple regions at once, instead of 
 
     {
-        backends: [ "aws-cloudwatch-statsd-backend" ],
+        backends: [ "cloudwatch-backend-for-statsd" ],
         cloudwatch: 
         {
             accessKeyId: 'YOUR_ACCESS_KEY_ID', 
@@ -143,7 +143,7 @@ If you wish to send cloudwatch metrics to multiple regions at once, instead of
 you can use the `instances` key under `cloudwatch` to configure a list of configurations.
 
     {
-        backends: ["aws-cloudwatch-statsd-backend"],
+        backends: ["cloudwatch-backend-for-statsd"],
         cloudwatch: {
             instances: [{
                 accessKeyId: 'YOUR_ACCESS_KEY_ID',
