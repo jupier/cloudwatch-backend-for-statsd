@@ -69,4 +69,15 @@ describe("cloudwatch backend for statsd tests", function() {
       });
     });
   });
+
+  describe("createTimerMetrics", function() {
+    it("should return the timer metric data for cloudwatch", function() {
+      var createTimerMetrics = lib.createTimerMetrics;
+      createTimerMetrics(
+        { test: [1, 3], test2: 2, test4: 4 },
+        { namespace: "mynamespace", whitelist: ["test"] },
+        Date.now()
+      );
+    });
+  });
 });

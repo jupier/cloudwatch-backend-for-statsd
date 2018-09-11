@@ -68,7 +68,7 @@ function createCounterMetrics(metrics, config, timestamp) {
   for (var key in metrics) {
     if (key.indexOf("statsd.") == 0) continue;
 
-    if (!isWhitelisted(key)) {
+    if (!isWhitelisted(key, config.whitelist)) {
       continue;
     }
 
@@ -92,7 +92,7 @@ function createTimerMetrics(metrics, config, timestamp) {
   var namespace = "AwsCloudWatchStatsdBackend";
   for (var key in metrics) {
     if (metrics[key].length > 0) {
-      if (!isWhitelisted(key)) {
+      if (!isWhitelisted(key, config.whitelist)) {
         continue;
       }
 
@@ -131,11 +131,13 @@ function createTimerMetrics(metrics, config, timestamp) {
   return { metrics: currentTimerMetrics, namespace: namespace };
 }
 
+exports.createTimerMetrics = createTimerMetrics;
+
 function createGaugeMetrics(metrics, config, timestamp) {
   var currentGaugeMetrics = [];
   var namespace = "AwsCloudWatchStatsdBackend";
   for (var key in metrics) {
-    if (!isWhitelisted(key)) {
+    if (!isWhitelisted(key, config.whitelist)) {
       continue;
     }
 
@@ -158,7 +160,7 @@ function createSetMetrics(metrics, config, timestamp) {
   var currentSetMetrics = [];
   var namespace = "AwsCloudWatchStatsdBackend";
   for (var key in metrics) {
-    if (!isWhitelisted(key)) {
+    if (!isWhitelisted(key, config.whitelist)) {
       continue;
     }
 
