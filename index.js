@@ -8,7 +8,7 @@ function CloudwatchBackend(startupTime, config, emitter) {
 
   function setEmitter() {
     var cloudwatchApi = emitter.on("flush", function(timestamp, metrics) {
-      self.flush(timestamp, metrics, cloudwatchApi, self.config);
+      flush(timestamp, metrics, cloudwatchApi, self.config);
     });
   }
   setEmitter();
