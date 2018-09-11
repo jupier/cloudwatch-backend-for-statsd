@@ -1,4 +1,5 @@
 var AWS = require("aws-sdk");
+var util = require("util");
 
 function CloudwatchBackend(startupTime, config, emitter) {
   var self = this;
@@ -82,6 +83,7 @@ function createCounterMetrics(metrics, config, timestamp) {
       Value: metrics[key],
     });
   }
+  console.log("Counter metrics created : " + JSON.stringify(currentCounterMetrics) + " with namespace : " + namespace);
   return { metrics: currentCounterMetrics, namespace: namespace };
 }
 
@@ -125,6 +127,7 @@ function createTimerMetrics(metrics, config, timestamp) {
       });
     }
   }
+  console.log("Timer metrics created : " + JSON.stringify(currentTimerMetrics) + " with namespace : " + namespace);
   return { metrics: currentTimerMetrics, namespace: namespace };
 }
 
@@ -147,6 +150,7 @@ function createGaugeMetrics(metrics, config, timestamp) {
       Value: metrics[key],
     });
   }
+  console.log("Gauge metrics created : " + JSON.stringify(currentGaugeMetrics) + " with namespace : " + namespace);
   return { metrics: currentGaugeMetrics, namespace: namespace };
 }
 
@@ -169,6 +173,7 @@ function createSetMetrics(metrics, config, timestamp) {
       Value: metrics[key].values().length,
     });
   }
+  console.log("Set metrics created : " + JSON.stringify(currentSetMetrics) + " with namespace : " + namespace);
   return { metrics: currentSetMetrics, namespace: namespace };
 }
 
@@ -180,19 +185,23 @@ function flush(timestamp, metrics, cloudwatchApi, config) {
   var timers = metrics.timers;
   var sets = metrics.sets;
 
+  function batchCallback(err) {
+    if (err) {
+      console.log(util.inspect(err));
+    }
+  }
+
   var currentCounterMetrics = createCounterMetrics(counters, config, timestamp);
-  batchSend(currentCounterMetrics.metrics, currentCounterMetrics.namespace, cloudwatchApi);
+  batchSend(currentCounterMetrics.metrics, currentCounterMetrics.namespace, cloudwatchApi, batchCallback);
 
   var currentTimerMetrics = createTimerMetrics(timers, config, timestamp);
-  batchSend(currentTimerMetrics.metrics, currentTimerMetrics.namespace, cloudwatchApi);
+  batchSend(currentTimerMetrics.metrics, currentTimerMetrics.namespace, cloudwatchApi, batchCallback);
 
-  // put all currently accumulated gauge metrics into an array
   var currentGaugeMetrics = createGaugeMetrics(gauges, config, timestamp);
-  batchSend(currentGaugeMetrics.metrics, currentGaugeMetrics.namespace, cloudwatchApi);
+  batchSend(currentGaugeMetrics.metrics, currentGaugeMetrics.namespace, cloudwatchApi, batchCallback);
 
-  // put all currently accumulated set metrics into an array
   var currentSetMetrics = createSetMetrics(sets, config, timestamp);
-  batchSend(currentSetMetrics.metrics, currentSetMetrics.namespace, cloudwatchApi);
+  batchSend(currentSetMetrics.metrics, currentSetMetrics.namespace, cloudwatchApi, batchCallback);
 }
 exports.flush = flush;
 
