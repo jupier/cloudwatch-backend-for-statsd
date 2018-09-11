@@ -1,225 +1,208 @@
-var util = require('util');
-var AWS = require('aws-sdk');
+var AWS = require("aws-sdk");
 
 function CloudwatchBackend(startupTime, config, emitter) {
-    var self = this;
+  var self = this;
 
-    this.config = config || {};
-    AWS.config = this.config;
+  this.config = config || {};
+  AWS.config = this.config;
 
-    function setEmitter() {
-        self.cloudwatch = new AWS.CloudWatch(self.config);
-        emitter.on('flush', function(timestamp, metrics) { self.flush(timestamp, metrics); });
+  function setEmitter() {
+    var cloudwatchApi = emitter.on("flush", function(timestamp, metrics) {
+      self.flush(timestamp, metrics, cloudwatchApi, self.config);
+    });
+  }
+  setEmitter();
+}
+exports.CloudwatchBackend = CloudwatchBackend;
+
+function processKey(key) {
+  var parts = key.split(/[\.\/-]/);
+  return {
+    metricName: parts[parts.length - 1],
+    namespace: parts.length > 1 ? parts.splice(0, parts.length - 1).join("/") : null,
+  };
+}
+exports.processKey = processKey;
+
+function isWhitelisted(key, whitelist) {
+  if (whitelist && whitelist.length > 0 && whitelist.indexOf(key) >= 0) {
+    return true;
+  }
+  return false;
+}
+exports.isWhitelisted = isWhitelisted;
+
+function chunk(arr, chunkSize) {
+  var groups = [],
+    i;
+  for (i = 0; i < arr.length; i += chunkSize) {
+    groups.push(arr.slice(i, i + chunkSize));
+  }
+  return groups;
+}
+exports.chunk = chunk;
+
+function batchSend(currentMetricsBatch, namespace, cloudwatchApi, callback) {
+  // send off the array (instead of one at a time)
+  if (currentMetricsBatch.length > 0) {
+    // Chunk into groups of 20
+    var chunkedGroups = chunk(currentMetricsBatch, 20);
+    for (var i = 0, len = chunkedGroups.length; i < len; i++) {
+      cloudwatchApi.putMetricData(
+        {
+          MetricData: chunkedGroups[i],
+          Namespace: namespace,
+        },
+        callback
+      );
+    }
+  }
+}
+exports.batchSend = batchSend;
+
+function createCounterMetrics(metrics, config, timestamp) {
+  // put all currently accumulated counter metrics into an array
+  var currentCounterMetrics = [];
+  var namespace = "AwsCloudWatchStatsdBackend";
+  for (var key in metrics) {
+    if (key.indexOf("statsd.") == 0) continue;
+
+    if (!isWhitelisted(key)) {
+      continue;
     }
 
-    // if iamRole is set attempt to fetch credentials from the Metadata Service
-    if (this.config.iamRole) {
-        console.log('Fetching IAM role credentials for ' + this.config.iamRole);
-        ms = new AWS.MetadataService();
-        ms.request('/latest/meta-data/iam/security-credentials/' + this.config.iamRole, function(err, rdata) {
-            if (err) {
-                console.log('Failed to fetch IAM role credentials: ' + err);
-            } else {
-                console.log('IAM role credentials fetched');
-                var data = JSON.parse(rdata);
-                self.config.credentials = new AWS.Credentials(data.AccessKeyId, data.SecretAccessKey, data.Token);
-                setEmitter();
-            }
-        });
-    } else {
-        setEmitter();
+    var names = config.processKeyForNamespace ? processKey(key) : {};
+    namespace = config.namespace || names.namespace || "AwsCloudWatchStatsdBackend";
+    var metricName = config.metricName || names.metricName || key;
+
+    currentCounterMetrics.push({
+      MetricName: metricName,
+      Unit: "Count",
+      Timestamp: new Date(timestamp * 1000).toISOString(),
+      Value: metrics[key],
+    });
+  }
+  return { metrics: currentCounterMetrics, namespace: namespace };
+}
+
+function createTimerMetrics(metrics, config, timestamp) {
+  var currentTimerMetrics = [];
+  var namespace = "AwsCloudWatchStatsdBackend";
+  for (var key in metrics) {
+    if (metrics[key].length > 0) {
+      if (!isWhitelisted(key)) {
+        continue;
+      }
+
+      var values = metrics[key].sort(function(a, b) {
+        return a - b;
+      });
+      var count = values.length;
+      var min = values[0];
+      var max = values[count - 1];
+
+      var cumulativeValues = [min];
+      for (var i = 1; i < count; i++) {
+        cumulativeValues.push(values[i] + cumulativeValues[i - 1]);
+      }
+
+      var sum = cumulativeValues[count - 1];
+
+      var names = config.processKeyForNamespace ? processKey(key) : {};
+      namespace = config.namespace || names.namespace || "AwsCloudWatchStatsdBackend";
+      var metricName = config.metricName || names.metricName || key;
+
+      currentTimerMetrics.push({
+        MetricName: metricName,
+        Unit: "Milliseconds",
+        Timestamp: new Date(timestamp * 1000).toISOString(),
+        StatisticValues: {
+          Minimum: min,
+          Maximum: max,
+          Sum: sum,
+          SampleCount: count,
+        },
+      });
     }
-};
+  }
+  return { metrics: currentTimerMetrics, namespace: namespace };
+}
 
-CloudwatchBackend.prototype.processKey = function(key) {
-    var parts = key.split(/[\.\/-]/);
-
-    return {
-        metricName: parts[parts.length - 1],
-        namespace: parts.length > 1 ? parts.splice(0, parts.length - 1).join("/") : null
-    };
-};
-
-CloudwatchBackend.prototype.isWhitelisted = function(key) {
-    if (this.config.whitelist && this.config.whitelist.length > 0 && this.config.whitelist.indexOf(key) >= 0) {
-        return true;
-    }
-    return false;
-};
-
-CloudwatchBackend.prototype.chunk = function(arr, chunkSize) {
-
-    var groups = [],
-        i;
-    for (i = 0; i < arr.length; i += chunkSize) {
-        groups.push(arr.slice(i, i + chunkSize));
-    }
-    return groups;
-};
-
-CloudwatchBackend.prototype.batchSend = function(currentMetricsBatch, namespace) {
-
-    // send off the array (instead of one at a time)
-    if (currentMetricsBatch.length > 0) {
-
-        // Chunk into groups of 20
-        var chunkedGroups = this.chunk(currentMetricsBatch, 20);
-
-        for (var i = 0, len = chunkedGroups.length; i < len; i++) {
-            this.cloudwatch.putMetricData({
-                MetricData: chunkedGroups[i],
-                Namespace: namespace
-            }, function(err, data) {
-                if (err) {
-                    // log an error
-                    console.log(util.inspect(err));
-                } else {
-                    // Success
-                    // console.log(util.inspect(data));
-                }
-            });
-        }
-    }
-};
-
-CloudwatchBackend.prototype.flush = function(timestamp, metrics) {
-
-    console.log('Flushing metrics at ' + new Date(timestamp * 1000).toISOString());
-
-    var counters = metrics.counters;
-    var gauges = metrics.gauges;
-    var timers = metrics.timers;
-    var sets = metrics.sets;
-
-    // put all currently accumulated counter metrics into an array
-    var currentCounterMetrics = [];
-    var namespace = "AwsCloudWatchStatsdBackend";
-    for (key in counters) {
-        if (key.indexOf('statsd.') == 0)
-            continue;
-
-        if (!this.isWhitelisted(key)) {
-            continue;
-        }
-
-        var names = this.config.processKeyForNamespace ? this.processKey(key) : {};
-        namespace = this.config.namespace || names.namespace || "AwsCloudWatchStatsdBackend";
-        var metricName = this.config.metricName || names.metricName || key;
-
-        currentCounterMetrics.push({
-            MetricName: metricName,
-            Unit: 'Count',
-            Timestamp: new Date(timestamp * 1000).toISOString(),
-            Value: counters[key]
-        });
+function createGaugeMetrics(metrics, config, timestamp) {
+  var currentGaugeMetrics = [];
+  var namespace = "AwsCloudWatchStatsdBackend";
+  for (var key in metrics) {
+    if (!isWhitelisted(key)) {
+      continue;
     }
 
-    this.batchSend(currentCounterMetrics, namespace);
+    var names = config.processKeyForNamespace ? processKey(key) : {};
+    namespace = config.namespace || names.namespace || "AwsCloudWatchStatsdBackend";
+    var metricName = config.metricName || names.metricName || key;
 
-    // put all currently accumulated timer metrics into an array
-    var currentTimerMetrics = [];
-    for (key in timers) {
-        if (timers[key].length > 0) {
+    currentGaugeMetrics.push({
+      MetricName: metricName,
+      Unit: "None",
+      Timestamp: new Date(timestamp * 1000).toISOString(),
+      Value: metrics[key],
+    });
+  }
+  return { metrics: currentGaugeMetrics, namespace: namespace };
+}
 
-            if (!this.isWhitelisted(key)) {
-                continue;
-            }
-
-            var values = timers[key].sort(function(a, b) {
-                return a - b;
-            });
-            var count = values.length;
-            var min = values[0];
-            var max = values[count - 1];
-
-            var cumulativeValues = [min];
-            for (var i = 1; i < count; i++) {
-                cumulativeValues.push(values[i] + cumulativeValues[i - 1]);
-            }
-
-            var sum = min;
-            var mean = min;
-            var maxAtThreshold = max;
-
-            var message = "";
-
-            var key2;
-
-            sum = cumulativeValues[count - 1];
-            mean = sum / count;
-
-            var names = this.config.processKeyForNamespace ? this.processKey(key) : {};
-            namespace = this.config.namespace || names.namespace || "AwsCloudWatchStatsdBackend";
-            var metricName = this.config.metricName || names.metricName || key;
-
-            currentTimerMetrics.push({
-                MetricName: metricName,
-                Unit: 'Milliseconds',
-                Timestamp: new Date(timestamp * 1000).toISOString(),
-                StatisticValues: {
-                    Minimum: min,
-                    Maximum: max,
-                    Sum: sum,
-                    SampleCount: count
-                }
-            });
-        }
+function createSetMetrics(metrics, config, timestamp) {
+  var currentSetMetrics = [];
+  var namespace = "AwsCloudWatchStatsdBackend";
+  for (var key in metrics) {
+    if (!isWhitelisted(key)) {
+      continue;
     }
 
-    this.batchSend(currentTimerMetrics, namespace);
+    var names = config.processKeyForNamespace ? processKey(key) : {};
+    namespace = config.namespace || names.namespace || "AwsCloudWatchStatsdBackend";
+    var metricName = config.metricName || names.metricName || key;
 
-    // put all currently accumulated gauge metrics into an array
-    var currentGaugeMetrics = [];
-    for (key in gauges) {
+    currentSetMetrics.push({
+      MetricName: metricName,
+      Unit: "None",
+      Timestamp: new Date(timestamp * 1000).toISOString(),
+      Value: metrics[key].values().length,
+    });
+  }
+  return { metrics: currentSetMetrics, namespace: namespace };
+}
 
-        if (!this.isWhitelisted(key)) {
-            continue;
-        }
+function flush(timestamp, metrics, cloudwatchApi, config) {
+  console.log("Flushing metrics at " + new Date(timestamp * 1000).toISOString());
 
-        var names = this.config.processKeyForNamespace ? this.processKey(key) : {};
-        namespace = this.config.namespace || names.namespace || "AwsCloudWatchStatsdBackend";
-        var metricName = this.config.metricName || names.metricName || key;
+  var counters = metrics.counters;
+  var gauges = metrics.gauges;
+  var timers = metrics.timers;
+  var sets = metrics.sets;
 
-        currentGaugeMetrics.push({
-            MetricName: metricName,
-            Unit: 'None',
-            Timestamp: new Date(timestamp * 1000).toISOString(),
-            Value: gauges[key]
-        });
-    }
+  var currentCounterMetrics = createCounterMetrics(counters, config, timestamp);
+  batchSend(currentCounterMetrics.metrics, currentCounterMetrics.namespace, cloudwatchApi);
 
-    this.batchSend(currentGaugeMetrics, namespace);
+  var currentTimerMetrics = createTimerMetrics(timers, config, timestamp);
+  batchSend(currentTimerMetrics.metrics, currentTimerMetrics.namespace, cloudwatchApi);
 
-    // put all currently accumulated set metrics into an array
-    var currentSetMetrics = [];
-    for (key in sets) {
+  // put all currently accumulated gauge metrics into an array
+  var currentGaugeMetrics = createGaugeMetrics(gauges, config, timestamp);
+  batchSend(currentGaugeMetrics.metrics, currentGaugeMetrics.namespace, cloudwatchApi);
 
-        if (!this.isWhitelisted(key)) {
-            continue;
-        }
-
-        var names = this.config.processKeyForNamespace ? this.processKey(key) : {};
-        namespace = this.config.namespace || names.namespace || "AwsCloudWatchStatsdBackend";
-        var metricName = this.config.metricName || names.metricName || key;
-
-        currentSetMetrics.push({
-            MetricName: metricName,
-            Unit: 'None',
-            Timestamp: new Date(timestamp * 1000).toISOString(),
-            Value: sets[key].values().length
-        });
-    }
-
-    this.batchSend(currentSetMetrics, namespace);
-};
+  // put all currently accumulated set metrics into an array
+  var currentSetMetrics = createSetMetrics(sets, config, timestamp);
+  batchSend(currentSetMetrics.metrics, currentSetMetrics.namespace, cloudwatchApi);
+}
+exports.flush = flush;
 
 exports.init = function(startupTime, config, events) {
-    var cloudwatch = config.cloudwatch || {};
-    var instances = cloudwatch.instances || [cloudwatch];
-    for (key in instances) {
-        instanceConfig = instances[key];
-        console.log("Starting cloudwatch reporter instance in region:", instanceConfig.region);
-        var instance = new CloudwatchBackend(startupTime, instanceConfig, events);
-    }
-    return true;
+  var cloudwatch = config.cloudwatch || {};
+  var instances = cloudwatch.instances || [cloudwatch];
+  for (var key in instances) {
+    var instanceConfig = instances[key];
+    console.log("Starting cloudwatch reporter instance in region:", instanceConfig.region);
+    new CloudwatchBackend(startupTime, instanceConfig, events);
+  }
+  return true;
 };

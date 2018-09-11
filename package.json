@@ -4,7 +4,8 @@
   "description": "simple cloudwatch backend for statsd",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha",
+    "prettier": "prettier --config .prettierrc --write '**.js'"
   },
   "repository": {
     "type": "git",
@@ -23,6 +24,14 @@
   },
   "homepage": "https://github.com/ridrum/cloudwatch-backend-for-statsd#readme",
   "dependencies": {
-    "aws-sdk": "2.307.0"
+    "aws-sdk": "2.307.0",
+    "lodash": "^4.17.10",
+    "mocha": "^5.2.0",
+    "sinon": "^6.2.0"
+  },
+  "devDependencies": {
+    "chai": "^4.1.2",
+    "eslint": "^5.5.0",
+    "prettier": "^1.14.2"
   }
 }

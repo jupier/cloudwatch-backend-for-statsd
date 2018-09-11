@@ -1,6 +1,6 @@
 **This repository is a clone of https://github.com/camitz/aws-cloudwatch-statsd-backend**
 
-**For maintainability purpose I decided to clone the repository.**
+**For maintainability purpose and  improvements I decided to clone the repository.**
 
 # StatsD backend for AWS CloudWatch
 
@@ -20,7 +20,7 @@ The CloudWatch backend is an npm package that can be installed with the npm comm
 
     npm install cloudwatch-backend-for-statsd
 
-The package has two depdencies that should be installed automatically, [awssum](https://npmjs.org/package/awssum) and [fmt](https://npmjs.org/package/fmt). Awssum is a node.js package encapsulating the AWS API.
+The package is based on [aws-sdk](https://npmjs.org/package/aws-sdk).
 
 ## Configuration
 
@@ -57,6 +57,19 @@ the Unit will be Counter, the metric name gorets. The value will be the aggregat
 *ms* corresponds the unit *Milliseconds*. *s and *g* to *None*.
 
 **Warning** Indescriminate use of CloudWatch metrics can quickly become costly. Amazon charges 50 cents for each combination of namepace, metric name and dimension per month. However, the 10 first per month are free.
+
+## Using AWS Roles to obtain credentials (highly recommended)
+
+If you don't add the accessKeyId and secretAccessKey to the configuration file, aws-sdk will automatically get the credentials regarding the AWS roles on your instance (via the metadata).
+
+    {
+        backends: [ "cloudwatch-backend-for-statsd" ],
+        cloudwatch:
+        {
+            region: 'YOUR_REGION',
+            whitelist: ['YOUR_FULL_METRIC_NAME']
+        }
+    }
 
 ## Additional configuration options
 
@@ -112,20 +125,6 @@ Using cloudwatch will incur a cost for each metric sent. In order to control you
 
 The above configuration would only sent the metric named 'YOUR_FULL_METRIC_NAME' to cloudwatch. As this is an array, you can specify multiple metrics. This is useful if you are using multiple backends e.g. mysql backend and want to send some metrics cloudwatch (due to the associated cost) and all the metrics together to another backend. It is also useful if you want to limit the metrics you use in cloudwatch to those that raise alarms as part of your wider AWS hosted system.
 
-## Using AWS Roles to obtain credentials
-
-A preferable approach to obtaining account credentials is instead to query the Metadata Service to obtain IAM security credentials for a given role. For example:
-
-    {
-        backends: [ "cloudwatch-backend-for-statsd" ],
-        cloudwatch:
-        {
-            iamRole: 'YOUR_ROLE_NAME',
-            region: 'YOUR_REGION',
-            whitelist: ['YOUR_FULL_METRIC_NAME']
-        }
-    }
-
 ## Multi-region support
 
 If you wish to send cloudwatch metrics to multiple regions at once, instead of 
@@ -158,16 +157,3 @@ you can use the `instances` key under `cloudwatch` to configure a list of config
             }]
         }
     }
-
-
-## Tutorial
-
-This project was launched with a following [blog post/tutorial](http://blog.simpletask.se/post/aggregating-monitoring-statistics-for-aws-cloudwatch) describing the implementation chain from log4net to Cloudwatch on a Windows system.
-
-Also in the series:
-
-[Improving the CloudWatch Appender](http://blog.simpletask.se/post/improving-cloudwatch-appender)
-
-[A CloudWatch Appender for log4net](http://blog.simpletask.se/post/awscloudwatch-log4net-appender)
-
-[![endorse](http://api.coderwall.com/camitz/endorsecount.png)](http://coderwall.com/camitz)
