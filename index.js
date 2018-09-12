@@ -8,7 +8,8 @@ function CloudwatchBackend(startupTime, config, emitter) {
   AWS.config = this.config;
 
   function setEmitter() {
-    var cloudwatchApi = emitter.on("flush", function(timestamp, metrics) {
+    var cloudwatchApi = new AWS.CloudWatch(self.config);
+    emitter.on("flush", function(timestamp, metrics) {
       flush(timestamp, metrics, cloudwatchApi, self.config);
     });
   }

@@ -1,6 +1,6 @@
 {
   "name": "cloudwatch-backend-for-statsd",
-  "version": "0.0.6-beta.3",
+  "version": "0.0.6-beta.4",
   "description": "simple cloudwatch backend for statsd",
   "main": "index.js",
   "scripts": {
