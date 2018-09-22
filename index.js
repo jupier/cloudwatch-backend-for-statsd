@@ -1,5 +1,6 @@
 var AWS = require("aws-sdk");
 var util = require("util");
+var _ = require("lodash");
 
 function CloudwatchBackend(startupTime, config, emitter) {
   var self = this;
@@ -26,9 +27,18 @@ function processKey(key) {
 }
 exports.processKey = processKey;
 
+/*
+  whitelist can be a list of regexp or simple regexp
+  if whitelist is not defined in the config (undefined or null) it returns true
+*/
 function isWhitelisted(key, whitelist) {
-  if (whitelist && whitelist.length > 0 && whitelist.indexOf(key) >= 0) {
-    return true;
+  // if there is no white listed metrics all the metrics will be send
+  if (_.isNil(whitelist)) return true;
+
+  var whitelistArr = _.castArray(whitelist);
+  for (var value of whitelistArr) {
+    var reg = RegExp("^" + value + "$");
+    if (reg.test(key)) return true;
   }
   return false;
 }
@@ -44,11 +54,10 @@ function chunk(arr, chunkSize) {
 }
 exports.chunk = chunk;
 
-function batchSend(currentMetricsBatch, namespace, cloudwatchApi, callback) {
-  // send off the array (instead of one at a time)
-  if (currentMetricsBatch.length > 0) {
+function batchSend(currentMetricsBatch, cloudwatchApi, callback) {
+  _.forEach(currentMetricsBatch, function(metrics, namespace) {
     // Chunk into groups of 20
-    var chunkedGroups = chunk(currentMetricsBatch, 20);
+    var chunkedGroups = chunk(metrics, 20);
     for (var i = 0, len = chunkedGroups.length; i < len; i++) {
       cloudwatchApi.putMetricData(
         {
@@ -58,14 +67,13 @@ function batchSend(currentMetricsBatch, namespace, cloudwatchApi, callback) {
         callback
       );
     }
-  }
+  });
 }
 exports.batchSend = batchSend;
 
 function createCounterMetrics(metrics, config, timestamp) {
   // put all currently accumulated counter metrics into an array
-  var currentCounterMetrics = [];
-  var namespace = "AwsCloudWatchStatsdBackend";
+  var currentCounterMetrics = {};
   for (var key in metrics) {
     if (key.indexOf("statsd.") == 0) continue;
 
@@ -74,23 +82,26 @@ function createCounterMetrics(metrics, config, timestamp) {
     }
 
     var names = config.processKeyForNamespace ? processKey(key) : {};
-    namespace = config.namespace || names.namespace || "AwsCloudWatchStatsdBackend";
+    var namespace = names.namespace || config.namespace || "AwsCloudWatchStatsdBackend";
     var metricName = config.metricName || names.metricName || key;
 
-    currentCounterMetrics.push({
+    if (_.isNil(currentCounterMetrics[namespace])) {
+      currentCounterMetrics[namespace] = [];
+    }
+    currentCounterMetrics[namespace].push({
       MetricName: metricName,
       Unit: "Count",
       Timestamp: new Date(timestamp * 1000).toISOString(),
       Value: metrics[key],
     });
   }
-  console.log("Counter metrics created : " + JSON.stringify(currentCounterMetrics) + " with namespace : " + namespace);
-  return { metrics: currentCounterMetrics, namespace: namespace };
+  console.log("Counter metrics created : " + JSON.stringify(currentCounterMetrics));
+  return currentCounterMetrics;
 }
+exports.createCounterMetrics = createCounterMetrics;
 
 function createTimerMetrics(metrics, config, timestamp) {
-  var currentTimerMetrics = [];
-  var namespace = "AwsCloudWatchStatsdBackend";
+  var currentTimerMetrics = {};
   for (var key in metrics) {
     if (metrics[key].length > 0) {
       if (!isWhitelisted(key, config.whitelist)) {
@@ -112,10 +123,14 @@ function createTimerMetrics(metrics, config, timestamp) {
       var sum = cumulativeValues[count - 1];
 
       var names = config.processKeyForNamespace ? processKey(key) : {};
-      namespace = config.namespace || names.namespace || "AwsCloudWatchStatsdBackend";
+      var namespace = names.namespace || config.namespace || "AwsCloudWatchStatsdBackend";
       var metricName = config.metricName || names.metricName || key;
 
-      currentTimerMetrics.push({
+      if (_.isNil(currentTimerMetrics[namespace])) {
+        currentTimerMetrics[namespace] = [];
+      }
+
+      currentTimerMetrics[namespace].push({
         MetricName: metricName,
         Unit: "Milliseconds",
         Timestamp: new Date(timestamp * 1000).toISOString(),
@@ -128,57 +143,59 @@ function createTimerMetrics(metrics, config, timestamp) {
       });
     }
   }
-  console.log("Timer metrics created : " + JSON.stringify(currentTimerMetrics) + " with namespace : " + namespace);
-  return { metrics: currentTimerMetrics, namespace: namespace };
+  console.log("Timer metrics created : " + JSON.stringify(currentTimerMetrics));
+  return currentTimerMetrics;
 }
-
 exports.createTimerMetrics = createTimerMetrics;
 
 function createGaugeMetrics(metrics, config, timestamp) {
-  var currentGaugeMetrics = [];
-  var namespace = "AwsCloudWatchStatsdBackend";
+  var currentGaugeMetrics = {};
   for (var key in metrics) {
     if (!isWhitelisted(key, config.whitelist)) {
       continue;
     }
 
     var names = config.processKeyForNamespace ? processKey(key) : {};
-    namespace = config.namespace || names.namespace || "AwsCloudWatchStatsdBackend";
+    namespace = names.namespace || config.namespace || "AwsCloudWatchStatsdBackend";
     var metricName = config.metricName || names.metricName || key;
 
-    currentGaugeMetrics.push({
+    if (_.isNil(currentGaugeMetrics[namespace])) currentGaugeMetrics[namespace] = [];
+
+    currentGaugeMetrics[namespace].push({
       MetricName: metricName,
       Unit: "None",
       Timestamp: new Date(timestamp * 1000).toISOString(),
       Value: metrics[key],
     });
   }
-  console.log("Gauge metrics created : " + JSON.stringify(currentGaugeMetrics) + " with namespace : " + namespace);
-  return { metrics: currentGaugeMetrics, namespace: namespace };
+  console.log("Gauge metrics created : " + JSON.stringify(currentGaugeMetrics));
+  return currentGaugeMetrics;
 }
+exports.createGaugeMetrics = createGaugeMetrics;
 
 function createSetMetrics(metrics, config, timestamp) {
-  var currentSetMetrics = [];
-  var namespace = "AwsCloudWatchStatsdBackend";
+  var currentSetMetrics = {};
   for (var key in metrics) {
     if (!isWhitelisted(key, config.whitelist)) {
       continue;
     }
 
     var names = config.processKeyForNamespace ? processKey(key) : {};
-    namespace = config.namespace || names.namespace || "AwsCloudWatchStatsdBackend";
+    var namespace = names.namespace || config.namespace || "AwsCloudWatchStatsdBackend";
     var metricName = config.metricName || names.metricName || key;
 
-    currentSetMetrics.push({
+    if (_.isNil(currentSetMetrics[namespace])) currentSetMetrics[namespace] = [];
+    currentSetMetrics[namespace].push({
       MetricName: metricName,
       Unit: "None",
       Timestamp: new Date(timestamp * 1000).toISOString(),
       Value: metrics[key].values().length,
     });
   }
-  console.log("Set metrics created : " + JSON.stringify(currentSetMetrics) + " with namespace : " + namespace);
-  return { metrics: currentSetMetrics, namespace: namespace };
+  console.log("Set metrics created : " + JSON.stringify(currentSetMetrics));
+  return currentSetMetrics;
 }
+exports.createSetMetrics = createSetMetrics;
 
 function flush(timestamp, metrics, cloudwatchApi, config) {
   console.log("Flushing metrics at " + new Date(timestamp * 1000).toISOString());
@@ -195,16 +212,16 @@ function flush(timestamp, metrics, cloudwatchApi, config) {
   }
 
   var currentCounterMetrics = createCounterMetrics(counters, config, timestamp);
-  batchSend(currentCounterMetrics.metrics, currentCounterMetrics.namespace, cloudwatchApi, batchCallback);
+  batchSend(currentCounterMetrics, cloudwatchApi, batchCallback);
 
   var currentTimerMetrics = createTimerMetrics(timers, config, timestamp);
-  batchSend(currentTimerMetrics.metrics, currentTimerMetrics.namespace, cloudwatchApi, batchCallback);
+  batchSend(currentTimerMetrics, cloudwatchApi, batchCallback);
 
   var currentGaugeMetrics = createGaugeMetrics(gauges, config, timestamp);
-  batchSend(currentGaugeMetrics.metrics, currentGaugeMetrics.namespace, cloudwatchApi, batchCallback);
+  batchSend(currentGaugeMetrics, cloudwatchApi, batchCallback);
 
   var currentSetMetrics = createSetMetrics(sets, config, timestamp);
-  batchSend(currentSetMetrics.metrics, currentSetMetrics.namespace, cloudwatchApi, batchCallback);
+  batchSend(currentSetMetrics, cloudwatchApi, batchCallback);
 }
 exports.flush = flush;
 

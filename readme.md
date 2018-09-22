@@ -98,7 +98,7 @@ Using the option *processKeyForNamespace* (default is false) you can parse the b
             accessKeyId: 'YOUR_ACCESS_KEY_ID', 
             secretAccessKey: 'YOUR_SECRET_ACCESS_KEY', 
             region: 'YOUR_REGION',
-            processKeyForNames:true
+            processKeyForNamespace:true
         }
     }
 
@@ -106,11 +106,11 @@ For example, sending StatsD the following
 
     App.Controller.Action.Request:1|c
 
-is will produce the equivalent to the former configuration example. Note that both will be suppressed if overriden as in the former configuration example.
+will produce the equivalent to the former configuration example. Note that both will be suppressed if overriden as in the former configuration example.
 
 ## Whitelisting Metrics
 
-Using cloudwatch will incur a cost for each metric sent. In order to control your costs, you can optionally whitelist (by full metric name) those metrics sent to cloudwatch. For example:
+Using cloudwatch will incur a cost for each metric sent. In order to control your costs, you can optionally whitelist those metrics sent to cloudwatch. For example:
 
     {
         backends: [ "cloudwatch-backend-for-statsd" ],
@@ -119,11 +119,41 @@ Using cloudwatch will incur a cost for each metric sent. In order to control you
             accessKeyId: 'YOUR_ACCESS_KEY_ID', 
             secretAccessKey: 'YOUR_SECRET_ACCESS_KEY', 
             region: 'YOUR_REGION',
-            whitelist: ['YOUR_FULL_METRIC_NAME']
+            whitelist: ['YOUR_METRIC_NAME']
         }
     }
 
-The above configuration would only sent the metric named 'YOUR_FULL_METRIC_NAME' to cloudwatch. As this is an array, you can specify multiple metrics. This is useful if you are using multiple backends e.g. mysql backend and want to send some metrics cloudwatch (due to the associated cost) and all the metrics together to another backend. It is also useful if you want to limit the metrics you use in cloudwatch to those that raise alarms as part of your wider AWS hosted system.
+The above configuration would only sent the metric named 'YOUR_FULL_METRIC_NAME' to cloudwatch. As this is an array, you can specify multiple metrics.
+
+The metric name can also be represented as a regexp (we automatically add '^' and '$' around the metric name). For example you can pass : 
+
+    {
+        backends: [ "cloudwatch-backend-for-statsd" ],
+        cloudwatch: 
+        {
+            accessKeyId: 'YOUR_ACCESS_KEY_ID', 
+            secretAccessKey: 'YOUR_SECRET_ACCESS_KEY', 
+            region: 'YOUR_REGION',
+            whitelist: ['metric.name.error', '.*name.database.*']
+        }
+    }
+
+The above configuration would sent the metric named metric.name.error or my.metricname.database.error or toto.name.database.mysql.error ...etc to cloudwatch.
+
+You can also simply pass a string : 
+
+    {
+        backends: [ "cloudwatch-backend-for-statsd" ],
+        cloudwatch: 
+        {
+            accessKeyId: 'YOUR_ACCESS_KEY_ID', 
+            secretAccessKey: 'YOUR_SECRET_ACCESS_KEY', 
+            region: 'YOUR_REGION',
+            whitelist: 'instance[1-9].database.*'
+        }
+    }
+
+This is useful if you are using multiple backends e.g. mysql backend and want to send some metrics cloudwatch (due to the associated cost) and all the metrics together to another backend. It is also useful if you want to limit the metrics you use in cloudwatch to those that raise alarms as part of your wider AWS hosted system.
 
 ## Multi-region support
 

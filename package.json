@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "mocha",
-    "prettier": "prettier --config .prettierrc --write '**.js'"
+    "prettier": "prettier --config .prettierrc --write 'index.js' './test/*.js'"
   },
   "repository": {
     "type": "git",
